@@ -11,8 +11,10 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.CompoundButton;
 import android.widget.ListView;
+import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.Toast;
 
@@ -43,22 +45,26 @@ public class MainActivity extends AppCompatActivity {
         //Setting up the Bluetooth Switch
 
         Switch mySwitch=(Switch)findViewById(R.id.blueSwitch);
+        final Button myButton=(Button)findViewById(R.id.connectButton);
 
         mySwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 if(isChecked)
                 {
+                    myButton.setEnabled(true);
                     BtEnable();
                 }
                 else
                 {
+                    myButton.setEnabled(false);
                     BtDisable();
                 }
             }
         });
 
         mySwitch.setChecked(mBluetoothAdapter.isEnabled());
+        myButton.setEnabled(mBluetoothAdapter.isEnabled());
         if(mBluetoothAdapter.isEnabled())
         {
             BtEnable();
@@ -89,6 +95,8 @@ public class MainActivity extends AppCompatActivity {
         {
             mBluetoothAdapter.disable();
             ArrayAdapter<String> mArrayAdapter=new ArrayAdapter<String>(this,android.R.layout.simple_list_item_1);
+            Spinner spinner=(Spinner)findViewById(R.id.pairedSpinner);
+            spinner.setAdapter(mArrayAdapter);
             ListView list=(ListView)findViewById(R.id.pairedList);
             list.setAdapter(mArrayAdapter);
 
@@ -130,7 +138,10 @@ public class MainActivity extends AppCompatActivity {
         }
 
         final ListView list=(ListView)findViewById(R.id.pairedList);
+        final Spinner spinner=(Spinner)findViewById(R.id.pairedSpinner);
         list.setAdapter(mArrayAdapter);
+        spinner.setAdapter(mArrayAdapter);
+
         if(!BroadcastRegisterStatus)
         {
 
@@ -147,7 +158,7 @@ public class MainActivity extends AppCompatActivity {
                         //Add device to the arrayadapter
                         mArrayAdapter.add(fdevice.getName()+"\n"+fdevice.getAddress());
                         list.setAdapter(mArrayAdapter);
-
+                        spinner.setAdapter(mArrayAdapter);
                     }
                 }
             };
@@ -158,5 +169,21 @@ public class MainActivity extends AppCompatActivity {
             registerReceiver(mReciever,filter); // Dont forget to unregister the reciever
             BroadcastRegisterStatus=true;
         }
+    }
+
+    public void startConnectActivity(View view)
+    {
+        Spinner spinner=(Spinner)findViewById(R.id.pairedSpinner);
+        String dev=spinner.getSelectedItem().toString();
+        String[] devinfo=dev.split("\n");
+
+        Bundle b=new Bundle();
+
+        b.putString("deviceName",devinfo[0]);
+        b.putString("deviceAddress",devinfo[1]);
+
+        Intent intent=new Intent(this,ConnectActivity.class);
+        intent.putExtras(b);
+        startActivity(intent);
     }
 }
