@@ -11,7 +11,9 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.ArrayAdapter;
+import android.widget.CompoundButton;
 import android.widget.ListView;
+import android.widget.Switch;
 import android.widget.Toast;
 
 import java.lang.ref.ReferenceQueue;
@@ -22,9 +24,11 @@ public class MainActivity extends AppCompatActivity {
     BluetoothAdapter mBluetoothAdapter;
     int REQUEST_ENABLE_BT;
     BroadcastReceiver mReciever;
+    boolean BroadcastRegisterStatus;
 
     public MainActivity()
     {
+        BroadcastRegisterStatus=false;
         REQUEST_ENABLE_BT=2;
     }
 
@@ -36,13 +40,35 @@ public class MainActivity extends AppCompatActivity {
         //Setting up bluetooth
         mBluetoothAdapter=BluetoothAdapter.getDefaultAdapter();
 
+        //Setting up the Bluetooth Switch
+
+        Switch mySwitch=(Switch)findViewById(R.id.blueSwitch);
+
+        mySwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                if(isChecked)
+                {
+                    BtEnable();
+                }
+                else
+                {
+                    BtDisable();
+                }
+            }
+        });
+
+        mySwitch.setChecked(mBluetoothAdapter.isEnabled());
+        if(mBluetoothAdapter.isEnabled())
+        {
+            BtEnable();
+        }
     }
 
     @Override
     protected void onDestroy(){
         super.onDestroy();
-        unregisterReceiver(mReciever);
-        Log.v("Activity","mReciver Unregistered");
+        unregisterReceiver(mReciever);  //Unregister the Bluetooth enabled request reciever
     }
 
     @Override
@@ -50,16 +76,25 @@ public class MainActivity extends AppCompatActivity {
     {
         if(resultCode==RESULT_OK)
         {
-            Log.v("Bluetooth", "Bluetooth Enabled");
-        }
-        else
-        {
-            Log.v("Bluetooth","Bluetooth cancelled By user");
+            //Query Paired Devices
+            queryBtDevices();
         }
     }
 
-    public void onBtEnable(View view)
+    public void BtDisable()
     {
+        if(mBluetoothAdapter.isEnabled())
+        {
+            mBluetoothAdapter.disable();
+            ArrayAdapter<String> mArrayAdapter=new ArrayAdapter<String>(this,android.R.layout.simple_list_item_1);
+            ListView list=(ListView)findViewById(R.id.pairedList);
+            list.setAdapter(mArrayAdapter);
+
+        }
+    }
+    public void BtEnable()
+    {
+
         if(mBluetoothAdapter==null)
         {
             Toast.makeText(getApplicationContext(),"No Bluetooth Detected",Toast.LENGTH_SHORT).show();
@@ -71,10 +106,14 @@ public class MainActivity extends AppCompatActivity {
                 Intent enableBtIntent=new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
                 startActivityForResult(enableBtIntent,REQUEST_ENABLE_BT);
             }
+            else
+            {
+                queryBtDevices();
+            }
         }
     }
 
-    public void queryBtDevices(View view)
+    public void queryBtDevices()
     {
         Set<BluetoothDevice> pairedDevices=mBluetoothAdapter.getBondedDevices();
 
@@ -90,28 +129,32 @@ public class MainActivity extends AppCompatActivity {
 
         final ListView list=(ListView)findViewById(R.id.pairedList);
         list.setAdapter(mArrayAdapter);
-
-        mReciever=new BroadcastReceiver()
+        if(!BroadcastRegisterStatus)
         {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                String action=intent.getAction();
-                //When Discovery finds a device
-                if(BluetoothDevice.ACTION_FOUND.equals(action))
+
+            mReciever=new BroadcastReceiver()
+             {
+                @Override
+                 public void onReceive(Context context, Intent intent)
                 {
-                    Log.v("BT","Device found");
-                    //Get Device from the intent
-                    BluetoothDevice fdevice=intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
-                    //Add device to the arrayadapter
-                    mArrayAdapter.add(fdevice.getName()+"\n"+fdevice.getAddress());
-                    list.setAdapter(mArrayAdapter);
+                    String action=intent.getAction();
+                    //When Discovery finds a device
+                    if(BluetoothDevice.ACTION_FOUND.equals(action))
+                    {
+                        BluetoothDevice fdevice=intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                        //Add device to the arrayadapter
+                        mArrayAdapter.add(fdevice.getName()+"\n"+fdevice.getAddress());
+                        list.setAdapter(mArrayAdapter);
 
+                    }
                 }
-                Log.v("BT","onrecieve");
-            }
-        };
+            };
 
-        IntentFilter filter=new IntentFilter(BluetoothDevice.ACTION_FOUND);
-        registerReceiver(mReciever,filter); // Dont forget to unregister the reciever
+            //Register Broadcast Reciever
+
+            IntentFilter filter=new IntentFilter(BluetoothDevice.ACTION_FOUND);
+            registerReceiver(mReciever,filter); // Dont forget to unregister the reciever
+            BroadcastRegisterStatus=true;
+        }
     }
 }

@@ -16,19 +16,14 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content">
 
-        <Button
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Enable Bluetooth"
-            android:id="@+id/enableBt"
-            android:onClick="onBtEnable"/>
 
-        <Button
+        <Switch
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Get Paired"
-            android:id="@+id/getBtPaired"
-            android:onClick="queryBtDevices"/>
+            android:text="Bluetooth"
+            android:id="@+id/blueSwitch"
+            />
+
     </LinearLayout>
 
     <ListView
