@@ -68,7 +68,9 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy(){
         super.onDestroy();
-        unregisterReceiver(mReciever);  //Unregister the Bluetooth enabled request reciever
+
+        if(BroadcastRegisterStatus)
+            unregisterReceiver(mReciever);  //Unregister the Bluetooth enabled request reciever
     }
 
     @Override
