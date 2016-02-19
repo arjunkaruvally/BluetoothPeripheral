@@ -6,7 +6,13 @@ import android.content.Intent;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.TextView;
+
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 
 public class ConnectActivity extends AppCompatActivity {
 
@@ -43,7 +49,7 @@ public class ConnectActivity extends AppCompatActivity {
         }
 
         TextView textView=(TextView)findViewById(R.id.deviceInfo);
-        textView.setText(_DeviceName+"\n"+_DeviceAddress);
+        textView.setText(_DeviceName + "\n" + _DeviceAddress);
     }
 
     @Override
@@ -51,14 +57,15 @@ public class ConnectActivity extends AppCompatActivity {
     {
         super.onStart();
         _BluetoothUtility=new BluetoothUtility();
-        _BluetoothUtility.connect(_BluetoothDevice);
+        _BluetoothUtility.start();
+//        _BluetoothUtility.connect(_BluetoothDevice);
     }
 
     @Override
     protected void onResume()
     {
         super.onResume();
-        _BluetoothUtility.start();
+//        _BluetoothUtility.start();
     }
 
     @Override
@@ -77,5 +84,19 @@ public class ConnectActivity extends AppCompatActivity {
     protected void onDestroy()
     {
         super.onDestroy();
+    }
+
+    public void connectServer(View view)
+    {
+        _BluetoothUtility.connect(_BluetoothDevice);
+        Button button=(Button)findViewById(R.id.button3);
+        button.setEnabled(false);
+    }
+
+    public void sendMessage(View view)
+    {
+        EditText editText=(EditText)findViewById(R.id.messageToSend);
+        String msg=editText.getText().toString();
+        _BluetoothUtility.write(msg.getBytes(Charset.defaultCharset()));
     }
 }
