@@ -4,6 +4,9 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothServerSocket;
 import android.bluetooth.BluetoothSocket;
+import android.os.Handler;
+import android.os.Message;
+import android.provider.SyncStateContract;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -12,7 +15,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.Charset;
 import java.util.UUID;
-import java.util.logging.Handler;
 
 /**
  * Created by user on 2/17/2016.
@@ -38,10 +40,18 @@ public class BluetoothUtility {
     private ServerThread mServerThread;
     private ClientThread mClientThread;
 
-
     //Name and uuid for connection management
     public static final String NAME="BluePutDroid";
     public static final UUID MY_UUID=UUID.fromString("714d9764-afd6-44ca-8913-de270903f1ab");
+
+    //Variables to indicate the state of the program
+    public static final int STATE_DISCONNECTED=-1; //The connections are disconnected
+    public static final int STATE_NONE = 0;       // we're doing nothing
+    public static final int STATE_LISTEN = 1;     // now listening for incoming connections
+    public static final int STATE_CONNECTING = 2; // now initiating an outgoing connection
+    public static final int STATE_CONNECTED = 3;  // now connected to a remote device
+    public static final int STATE_ERROR=4;
+    public static int STATE_PRESENT;
 
     public BluetoothUtility(Handler handler)
     {
@@ -50,15 +60,32 @@ public class BluetoothUtility {
         mClientThread=null;
         mHandler=handler;
         mBluetoothAdapter=BluetoothAdapter.getDefaultAdapter();
+        STATE_PRESENT=STATE_DISCONNECTED;
     }
 
-    public BluetoothUtility()
+//    public BluetoothUtility()
+//    {
+//        mManagementThread=null; //Inititalise these threads during runtime
+//        mServerThread=null;
+//        mClientThread=null;
+//        mHandler=null;
+//        mBluetoothAdapter=BluetoothAdapter.getDefaultAdapter();
+//    }
+
+
+//    Cuurent state manager
+
+    private void setState(int state)
     {
-        mManagementThread=null; //Inititalise these threads during runtime
-        mServerThread=null;
-        mClientThread=null;
-        mHandler=null;
-        mBluetoothAdapter=BluetoothAdapter.getDefaultAdapter();
+        Log.v(TAG,"STATE CHANGE : "+STATE_PRESENT+" -> "+state);
+        STATE_PRESENT=state;
+        mHandler.obtainMessage(Constants.MESSAGE_STATE_CHANGE,STATE_PRESENT,-1).sendToTarget();
+    }
+
+    private void sendMessage(int type,String message)
+    {
+        Log.v(TAG,"SEND MESSAGE : "+type+" : "+message);
+        mHandler.obtainMessage(type,message).sendToTarget();
     }
 
     //Main ThreadManager functions
@@ -106,6 +133,21 @@ public class BluetoothUtility {
         mManagementThread.write(bytes);
     }
 
+    public void cancel()
+    {
+        if(mManagementThread!=null)
+        {
+            mManagementThread.cancel();
+        }
+        if(mClientThread!=null)
+        {
+            mClientThread.cancel();
+        }
+        if(mServerThread!=null)
+        {
+            mServerThread.cancel();
+        }
+    }
     /*
 
         Threads for bluetooth servers clients and managing connections
@@ -129,10 +171,12 @@ public class BluetoothUtility {
                 in=socket.getInputStream();
                 out=socket.getOutputStream();
                 Log.v(TAG,"Streams successfully created");
+                setState(STATE_CONNECTED);
             }
             catch(IOException e)
             {
-                Log.v(TAG,"Error creating streams ManagementThread:ManagementThread()");
+                Log.v(TAG, "Error creating streams ManagementThread:ManagementThread()");
+                setState(STATE_DISCONNECTED);
             }
 
             mmInStream=in;
@@ -148,31 +192,21 @@ public class BluetoothUtility {
             while (true) {
                 try {
 
-//                    String result="";
-
                     // Read from the InputStream
                     bytes = mmInStream.read(buffer);
-
-                    char ch;
-//                    for(int i=0;i<bytes;i++)
-//                    {
-//                        ch=(char)buffer[i];
-//                        if(ch=='$')
-//                            break;
-//
-//                        result=result+ch;
-//                    }
 
                     String result=new String(buffer, Charset.defaultCharset());
                     result=result.substring(0,bytes);
                     Log.v(TAG,"Input Stream Successful");
                     // Send the obtained bytes to the UI activity
                     Log.v(TAG,"The Obtained Bytes are");
+
                     Log.v("Message", result);
+                    sendMessage(Constants.MESSAGE_READ,result);
 //                    mHandler.obtainMessage(MESSAGE_READ, bytes, -1, buffer)
 //                            .sendToTarget();
                 } catch (IOException e) {
-                    Log.v(TAG,"Error in reading Input Stream ManagementThread:run()");
+                    Log.v(TAG, "Error in reading Input Stream ManagementThread:run()");
                     break;
                 }
             }
@@ -185,9 +219,12 @@ public class BluetoothUtility {
         {
             try {
                   mmOutStream.write(bytes);
+                sendMessage(Constants.MESSAGE_WRITE,"Success");
                 Log.v(TAG, "Successfully written to outputStream");
              } catch (IOException e) {
                 Log.v(TAG,"Error in writing to the OutputStream ManagementThread:write()");
+                setState(STATE_DISCONNECTED);
+                sendMessage(Constants.MESSAGE_WRITE,"Failure");
             }
         }
 
@@ -198,9 +235,11 @@ public class BluetoothUtility {
             try {
                 mmSocket.close();
                 Log.v(TAG, "Management Thread Socket cancelled");
+                setState(STATE_DISCONNECTED);
             }catch(IOException e)
             {
-                Log.v(TAG,"Error in closing the main Socket ManagemntThread:cancel()");
+                Log.v(TAG, "Error in closing the main Socket ManagemntThread:cancel()");
+                sendMessage(Constants.MESSAGE_ERROR,"Error in closing Socket");
             }
         }
 
@@ -225,7 +264,8 @@ public class BluetoothUtility {
             }
             catch (IOException e)
             {
-                Log.v(TAG,"Error in creating Server Socket ServerThread:ServerThread()");
+                Log.v(TAG, "Error in creating Server Socket ServerThread:ServerThread()");
+                setState(STATE_DISCONNECTED);
             }
             mmServerSocket=tmp;
         }
@@ -244,7 +284,8 @@ public class BluetoothUtility {
                     Log.v(TAG, "Succeeded in listening to socket serverThread");
                 }catch (IOException e)
                 {
-                    Log.v(TAG,"Error in listening to the serversocket ServerThread:run()");
+                    Log.v(TAG, "Error in listening to the serversocket ServerThread:run()");
+                    setState(STATE_DISCONNECTED);
                     break;
                 }
                 if(socket!=null)
@@ -252,14 +293,14 @@ public class BluetoothUtility {
                    try {
 
                    //do the work to manage connection here by sending mmServerSocket for managing connection
-                       connected(socket.getRemoteDevice(),socket);
+                       connected(socket.getRemoteDevice(), socket);
                        mmServerSocket.close();
                        Log.v(TAG, "Successfully closed ServerSocket");
                        break;
                    }
                    catch (IOException e)
                    {
-                       Log.v(TAG,"Error in closing server Socket ServerThread:run()");
+                       Log.v(TAG, "Error in closing server Socket ServerThread:run()");
                    }
                 }
             }
@@ -271,7 +312,7 @@ public class BluetoothUtility {
         {
             try{
                 mmServerSocket.close();
-                Log.v(TAG, "Successfullt cancelled ServerSocket");
+                Log.v(TAG, "Successfully cancelled ServerSocket");
             }catch (IOException e)
             {
                 Log.v(TAG,"Error in closing server socket close() ServerThread:cancel()");
@@ -294,7 +335,8 @@ public class BluetoothUtility {
                 Log.v(TAG,"Error in creating socket ClientThread");
             }catch (IOException e)
             {
-                Log.v(TAG,"Error in crearing Socket ClientThread:ClientThread()");
+                Log.v(TAG,"Error in creating Socket ClientThread:ClientThread()");
+                setState(STATE_DISCONNECTED);
             }
 
 
@@ -308,15 +350,16 @@ public class BluetoothUtility {
             try{
                 mmSocket.connect();
                 Log.v(TAG, "Successfully connected to client");
+                // DO work here by passing the mmsocket for managing connection
+                connected(mmDevice, mmSocket);
+
             }catch(IOException e)
             {
                 Log.v(TAG,mmSocket.toString());
-                Log.v(TAG,"Error in connecting to the client ClientThread:run()");
+                Log.v(TAG, "Error in connecting to the client ClientThread:run()");
                 e.printStackTrace();
+                setState(STATE_DISCONNECTED);
             }
-
-            // DO work here by passing the mmsocket for managing connection
-            connected(mmDevice,mmSocket);
 
         }
 
@@ -327,6 +370,7 @@ public class BluetoothUtility {
             try{
                 mmSocket.close();
                 Log.v(TAG, "Successfully cancelled socket ClientThread");
+
             }catch(IOException e)
             {
                 Log.v(TAG,"Error in closing socket ClientThread:cancel()");

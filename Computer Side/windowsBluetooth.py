@@ -23,9 +23,9 @@ try:
         if len(data) == 0: break
         result=data.decode("utf-8")
 
-        if result=="space" :        
-        	keyboardEvents.PressKey(32);
-        	keyboardEvents.ReleaseKey(32);
+        # if result=="space" :        
+        keyboardEvents.PressKey(int(result));
+        keyboardEvents.ReleaseKey(int(result));
         
 
         print("received [%s]" % result)
